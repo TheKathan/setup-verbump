@@ -1,0 +1,67 @@
+name: Setup verbump CLI
+description: Install verbump, version and changelog bumps for repos, and put `verbump` on the PATH without touching the job's Python.
+author: TheKathan
+branding:
+  icon: tag
+  color: blue
+
+inputs:
+  version:
+    description: 'verbump to install: a major such as "1" (the latest 1.x), an exact version such as "1.0.1", or any pip requirement for verbump-cli.'
+    default: "1"
+  python-version:
+    description: Python for verbump's own virtualenv (3.11 or newer). It is not put on the PATH.
+    default: "3.12"
+
+outputs:
+  version:
+    description: The installed verbump version, e.g. 1.0.1.
+    value: ${{ steps.install.outputs.version }}
+  path:
+    description: Full path of the verbump command.
+    value: ${{ steps.install.outputs.path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Refuse Windows
+      if: runner.os == 'Windows'
+      shell: bash
+      run: |
+        echo "::error::setup-verbump supports Linux and macOS runners only"
+        exit 1
+
+    - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+      id: python
+      with:
+        python-version: ${{ inputs.python-version }}
+        update-environment: false
+
+    - name: Install verbump
+      id: install
+      shell: bash
+      env:
+        PY: ${{ steps.python.outputs.python-path }}
+        VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        if [[ "$VERSION" =~ ^[0-9]+$ ]]; then
+          spec="verbump-cli>=$VERSION,<$((VERSION + 1))"
+        elif [[ "$VERSION" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          spec="verbump-cli==${VERSION#v}"
+        else
+          spec="$VERSION"
+        fi
+        venv="$RUNNER_TEMP/setup-verbump/venv"
+        bin="$RUNNER_TEMP/setup-verbump/bin"
+        rm -rf "$venv" "$bin"
+        "$PY" -m venv "$venv"
+        "$venv/bin/python" -m pip install --quiet --disable-pip-version-check "$spec"
+        # only the verbump command goes on the PATH, not the virtualenv's python or pip
+        mkdir -p "$bin"
+        ln -s "$venv/bin/verbump" "$bin/verbump"
+        echo "$bin" >> "$GITHUB_PATH"
+        v="$("$bin/verbump" --version | awk '{print $2}')"
+        echo "version=$v" >> "$GITHUB_OUTPUT"
+        echo "path=$bin/verbump" >> "$GITHUB_OUTPUT"
+        echo "verbump $v installed ($spec)"
