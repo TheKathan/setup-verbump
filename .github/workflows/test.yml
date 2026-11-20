@@ -35,4 +35,6 @@ jobs:
           test -n "$VERSION"
           test "$(verbump --version)" = "verbump $VERSION"
           test "$(command -v python3)" = "$BEFORE"
-          mkdir scratch && cd scratch && git init -q && verbump init && verbump check
+          mkdir scratch && cd scratch && git init -q
+          printf '[project]\nname = "app"\nversion = "0.1.0"\n' > pyproject.toml
+          verbump init && test "$(verbump check)" = "app: 0.1.0"
